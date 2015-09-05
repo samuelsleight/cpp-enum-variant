@@ -9,6 +9,7 @@ template<typename... Variants>
 class EnumT;
 
 namespace impl {
+    // Variadic Max
     template<typename T>
     constexpr auto max(T a) {
         return a;
@@ -23,6 +24,7 @@ namespace impl {
         }
     }
 
+    // List 
     template<typename T, std::size_t n>
     struct NthImpl : public NthImpl<typename T::Tail, n - 1> {};
 
@@ -43,20 +45,7 @@ namespace impl {
         using Nth = typename NthImpl<List<H, Ts...>, n>::value;
     };
 
-    template<typename T>
-    class EnumStorage;
-
-    template<typename Variant, typename... Variants>
-    class EnumStorage<::EnumT<Variant, Variants...>> {
-    public:
-        static constexpr std::size_t storage_size = max(sizeof(Variant), sizeof(Variants)...);
-        static constexpr std::size_t storage_align = max(alignof(Variant), alignof(Variants)...);
-
-        using StorageType = typename std::aligned_storage<storage_size, storage_align>::type;
-
-        StorageType storage;
-    };
-
+    // Constructor
     template<typename E, typename L, bool enable, std::size_t n, typename... Args>
     struct EnumConstructorImpl;
 
@@ -66,11 +55,10 @@ namespace impl {
     template<typename E, typename L, std::size_t n, typename... Args>
     struct EnumConstructorImpl<E, L, true, n, Args...> {
         static void construct(E* e, Args&&... args) {
-            ::new ((void *)::std::addressof(e->storage)) typename L::Head(std::forward<Args>(args)...);
+            ::new (&(e->storage)) typename L::Head(std::forward<Args>(args)...);
             e->tag = n;
         }
     };
-
 
     template<typename T, typename... Fs>
     struct EnumConstructor;
@@ -78,6 +66,59 @@ namespace impl {
     template<typename Variant, typename... Variants, typename... Args>
     struct EnumConstructor<::EnumT<Variant, Variants...>, Args...> : public EnumConstructorImpl<::EnumT<Variant, Variants...>, List<Variant, Variants...>, std::is_constructible<Variant, Args...>::value, 0, Args...> {};
 
+    // Copy Constructor
+    template<typename E, typename L, std::size_t n, std::size_t m>
+    struct EnumCopyImpl {
+        static void copy(const E& from, E* to) {
+            using T = typename L::template Nth<n>;
+
+            if(from.tag == n) {
+                to->tag = n;
+                ::new (&(to->storage)) T(*reinterpret_cast<T*>(&(from.storage)));
+            } else {
+                EnumCopyImpl<E, L, n + 1, m>::copy(std::forward<E>(from), to);
+            }
+        }
+    };
+
+    template<typename E, typename L, std::size_t n>
+    struct EnumCopyImpl<E, L, n, n> {
+        static void copy(const E& from, E* to) {}
+    };
+
+    template<typename E>
+    struct EnumCopy;
+
+    template<typename... Variants>
+    struct EnumCopy<::EnumT<Variants...>> : public EnumCopyImpl<::EnumT<Variants...>, List<Variants...>, 0, sizeof...(Variants)> {};
+
+    // Move Constructor
+    template<typename E, typename L, std::size_t n, std::size_t m>
+    struct EnumMoveImpl {
+        static void move(E&& from, E* to) {
+            using T = typename L::template Nth<n>;
+
+            if(from.tag == n) {
+                to->tag = std::move(from.tag);
+                ::new (&(to->storage)) T(std::move(*reinterpret_cast<T*>(&(from.storage))));
+            } else {
+                EnumMoveImpl<E, L, n + 1, m>::move(std::forward<E>(from), to);
+            }
+        }
+    };
+
+    template<typename E, typename L, std::size_t n>
+    struct EnumMoveImpl<E, L, n, n> {
+        static void move(E&& from, E* to) {}
+    };
+
+    template<typename E>
+    struct EnumMove;
+
+    template<typename... Variants>
+    struct EnumMove<::EnumT<Variants...>> : public EnumMoveImpl<::EnumT<Variants...>, List<Variants...>, 0, sizeof...(Variants)> {};
+
+    // Match
     template<typename E, typename L, std::size_t n, std::size_t m, typename... Fs>
     struct EnumMatchImpl;
 
@@ -105,6 +146,7 @@ namespace impl {
     template<typename... Variants, typename... Fs>
     struct EnumMatch<::EnumT<Variants...>, Fs...> : public EnumMatchImpl<::EnumT<Variants...>, List<Variants...>, 0, sizeof...(Variants), Fs...> {};
 
+    // Apply 
     template<typename E, typename L, std::size_t n, std::size_t m, typename F>
     struct EnumApplyImpl {
         static auto apply(E* e, F f) {
@@ -129,6 +171,7 @@ namespace impl {
     template<typename... Variants, typename F>
     struct EnumApply<::EnumT<Variants...>, F> : public EnumApplyImpl<::EnumT<Variants...>, List<Variants...>, 0, sizeof...(Variants), F> {};
 
+    // Destructor
     template<typename E, typename L, std::size_t n, std::size_t m>
     struct EnumDestructorImpl {
         static void destruct(E* e) {
@@ -158,7 +201,8 @@ template<typename VariantT, typename... Variants>
 class EnumT<VariantT, Variants...> {
 public:
     template<typename T>
-    using Variant = typename std::enable_if<std::is_trivially_copyable<T>::value, EnumT<VariantT, Variants..., T>>::type;
+    using Variant = EnumT<VariantT, Variants..., T>;
+    //using Variant = typename std::enable_if<std::is_trivially_copyable<T>::value, EnumT<VariantT, Variants..., T>>::type;
 
     using SelfType = EnumT<VariantT, Variants...>;
 
@@ -166,6 +210,9 @@ public:
 
     template<typename... Args>
     using ConstructorType = impl::EnumConstructor<SelfType, Args...>;
+
+    using CopyType = impl::EnumCopy<SelfType>;
+    using MoveType = impl::EnumMove<SelfType>;
 
     template<typename... Fs>
     using MatchType = impl::EnumMatch<SelfType, Fs...>;
@@ -188,24 +235,20 @@ public:
     EnumT() = delete;
 
     EnumT(const SelfType& other) {
-        std::copy(this->tag, other.tag);
-        std::copy(this->storage, other.storage);
+        CopyType::copy(std::forward<SelfType>(other), this);
     }
 
     EnumT(SelfType&& other) noexcept {
-        this->tag = std::move(other.tag);
-        this->storage = std::move(other.storage);
+        MoveType::move(std::forward<SelfType>(other), this);
     }
 
     EnumT& operator=(const SelfType& other) {
-        std::copy(this->tag, other.tag);
-        std::copy(this->storage, other.storage);
+        CopyType::copy(std::forward<SelfType>(other), this);
         return *this;
     }
 
     EnumT& operator=(SelfType&& other) noexcept {
-        this->tag = std::move(other.tag);
-        this->storage = std::move(other.storage);
+        MoveType::move(std::forward<SelfType>(other), this);
         return *this;
     }
 
@@ -231,7 +274,8 @@ public:
 class Enum {
 public:
     template<typename T>
-    using Variant = typename std::enable_if<std::is_trivially_copyable<T>::value, EnumT<T>>::type;
+    using Variant = EnumT<T>;
+    //using Variant = typename std::enable_if<std::is_trivially_copyable<T>::value, EnumT<T>>::type;
 };
 
 #endif

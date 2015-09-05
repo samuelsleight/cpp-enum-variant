@@ -10,11 +10,13 @@ struct Thing {
 
 int main(int argc, char* argv[]) {
     using Test = Enum
+        ::Variant<std::string>
         ::Variant<int>
         ::Variant<Thing>;
 
     std::vector<Test> v;
     v.emplace_back(7);
+    v.emplace_back("Hello");
     v.emplace_back(5);
     v.emplace_back(Thing{5, 'a'});
 
@@ -22,6 +24,7 @@ int main(int argc, char* argv[]) {
         std::cout << t.tag << std::endl;
 
         t.match(
+            [](std::string& s) { std::cout << "string: " << s << std::endl; },
             [](int& i) { std::cout << "int: " << i << std::endl; },
             [](Thing& t) { std::cout << "thing: " << t.i << ", " << t.c << std::endl; }
         );
