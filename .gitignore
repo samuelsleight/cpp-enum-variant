@@ -3,3 +3,10 @@ bin
 obj
 *.make
 *.swp
+/.vs/Enum/v14
+*.opensdf
+*.sln
+*.sdf
+*.vcxproj
+*.filters
+*.exe

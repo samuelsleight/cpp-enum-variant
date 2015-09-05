@@ -17,11 +17,7 @@ namespace impl {
 
     template<typename T, typename... Args>
     constexpr T max(T a, T b, Args... args) {
-        if(a > b) {
-            return max(a, args...);
-        } else {
-            return max(b, args...);
-        }
+		return a > b ? max(a, args...) : max(b, args...);
     }
 
     // List 
@@ -135,16 +131,22 @@ namespace impl {
         }
     };
 
-    template<typename E, typename L, std::size_t n, typename... Fs>
-    struct EnumMatchImpl<E, L, n, n, Fs...> {
-        static auto match(E* e, Fs... fs) {}
+    template<typename E, typename L, std::size_t m, typename F, typename... Fs>
+    struct EnumMatchImpl<E, L, m, m, F, Fs...> {
+        static auto match(E* e, F f, Fs... fs) {
+            using T = typename L::template Nth<m>;
+
+            if(e->tag == m) {
+                return f(*reinterpret_cast<T*>(&(e->storage)));
+            }
+        }
     };
 
     template<typename T, typename... Fs>
     struct EnumMatch;
 
     template<typename... Variants, typename... Fs>
-    struct EnumMatch<::EnumT<Variants...>, Fs...> : public EnumMatchImpl<::EnumT<Variants...>, List<Variants...>, 0, sizeof...(Variants), Fs...> {};
+    struct EnumMatch<::EnumT<Variants...>, Fs...> : public EnumMatchImpl<::EnumT<Variants...>, List<Variants...>, 0, sizeof...(Variants) - 1, Fs...> {};
 
     // Apply 
     template<typename E, typename L, std::size_t n, std::size_t m, typename F>
@@ -160,16 +162,22 @@ namespace impl {
         }
     };
 
-    template<typename E, typename L, std::size_t n, typename F>
-    struct EnumApplyImpl<E, L, n, n, F> {
-        static auto apply(E* e, F f) {}
+    template<typename E, typename L, std::size_t m, typename F>
+    struct EnumApplyImpl<E, L, m, m, F> {
+        static auto apply(E* e, F f) {
+            using T = typename L::template Nth<m>;
+
+            if(e->tag == m) {
+                return f(*reinterpret_cast<T*>(&(e->storage)));
+            }
+        }
     };
 
     template<typename T, typename F>
     struct EnumApply;
 
     template<typename... Variants, typename F>
-    struct EnumApply<::EnumT<Variants...>, F> : public EnumApplyImpl<::EnumT<Variants...>, List<Variants...>, 0, sizeof...(Variants), F> {};
+    struct EnumApply<::EnumT<Variants...>, F> : public EnumApplyImpl<::EnumT<Variants...>, List<Variants...>, 0, sizeof...(Variants) - 1, F> {};
 
     // Destructor
     template<typename E, typename L, std::size_t n, std::size_t m>

@@ -1,6 +1,8 @@
 #include "enum.hpp"
+#include "optional.hpp"
 
 #include <iostream>
+#include <string>
 #include <vector>
 
 struct Thing {
@@ -18,7 +20,7 @@ int main(int argc, char* argv[]) {
     v.emplace_back(7);
     v.emplace_back("Hello");
     v.emplace_back(5);
-    v.emplace_back(Thing{5, 'a'});
+    v.emplace_back(5, 'a');
 
     for(auto& t : v) {
         std::cout << t.tag << std::endl;
@@ -31,4 +33,16 @@ int main(int argc, char* argv[]) {
 
         std::cout << std::endl;
     }
+
+	// Optional Test
+	auto a = Optional<int>::Some(6);
+	if(a) {
+		std::cout << a.get() << std::endl;
+	}
+
+	try {
+		Optional<std::string>::None().get();
+	} catch(std::exception& e) {
+		std::cout << e.what() << std::endl;
+	}
 }
