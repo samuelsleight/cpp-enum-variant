@@ -34,15 +34,15 @@ int main(int argc, char* argv[]) {
         std::cout << std::endl;
     }
 
-	// Optional Test
-	auto a = Optional<int>::Some(6);
-	if(a) {
-		std::cout << a.get() << std::endl;
-	}
+    // Optional Test
+    auto a = Optional<int>::Some(6);
+    if(a) {
+        std::cout << a.get() << std::endl;
+    }
 
-	try {
-		Optional<std::string>::None().get();
-	} catch(std::exception& e) {
-		std::cout << e.what() << std::endl;
-	}
+    try {
+        Optional<std::string>::None().get();
+    } catch(std::exception& e) {
+        std::cout << e.what() << std::endl;
+    }
 }
