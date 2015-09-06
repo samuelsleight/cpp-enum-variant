@@ -52,20 +52,19 @@ private:
     using StorageT = typename std::aligned_storage<storage_size, storage_align>::type;
 
     // Implementation detail
-    template<typename E>
     struct impl {
         // Constructor
-        template<typename E, bool enable, std::size_t n, typename... Args>
+        template<bool enable, std::size_t n, typename... Args>
         struct ConstructorT;
 
-        template<typename E, std::size_t n, typename... Args>
-        struct ConstructorT<E, false, n, Args...> 
-            : public ConstructorT<E, std::is_constructible<typename E::VariantList::template Nth<n + 1>, Args...>::value, n + 1, Args...> {};
+        template<std::size_t n, typename... Args>
+        struct ConstructorT<false, n, Args...> 
+            : public ConstructorT<std::is_constructible<typename Self::VariantList::template Nth<n + 1>, Args...>::value, n + 1, Args...> {};
 
-        template<typename E, std::size_t n, typename... Args>
-        struct ConstructorT<E, true, n, Args...> {
-            static void construct(E* e, Args&&... args) {
-                using T = typename E::VariantList::template Nth<n>;
+        template<std::size_t n, typename... Args>
+        struct ConstructorT<true, n, Args...> {
+            static void construct(Self* e, Args&&... args) {
+                using T = typename Self::VariantList::template Nth<n>;
 
                 ::new (&(e->storage)) T(std::forward<Args>(args)...);
                 e->tag = n;
@@ -73,151 +72,108 @@ private:
         };
 
         template<typename... Args>
-        using Constructor = ConstructorT<E, std::is_constructible<typename E::VariantList::Head, Args...>::value, 0, Args...>;
+        using Constructor = ConstructorT<std::is_constructible<typename Self::VariantList::Head, Args...>::value, 0, Args...>;
+
+        // Helper
+        template<std::size_t n, std::size_t m, template<typename, std::size_t> typename F, typename... Args>
+        struct HelperT {
+            static auto call(const std::size_t& tag, Args... args) {
+                using T = typename Self::VariantList::template Nth<n>;
+
+                if(tag == n) {
+                    return F<T, n>::call(std::forward<Args>(args)...);
+                } else {
+                    return HelperT<n + 1, m, F, Args...>::call(tag, std::forward<Args>(args)...);
+                }
+            }
+        };
+
+        template<std::size_t n, template<typename, std::size_t> typename F, typename... Args>
+        struct HelperT<n, n, F, Args...> {
+            static auto call(const std::size_t& tag, Args... args) {
+                using T = typename Self::VariantList::template Nth<n>;
+
+                if(tag == n) {
+                    return F<T, n>::call(std::forward<Args>(args)...);
+                }
+            }
+        };
+
+        template<template<typename, std::size_t> typename F, typename... Args>
+        using Helper = HelperT<0, Self::variants - 1, F, Args...>;
 
         // Copy Constructor
-        template<typename E, std::size_t n, std::size_t m>
+        template<typename T, std::size_t n>
         struct CopyConstructorT {
-            static void copy(const E& from, E* to) {
-                using T = typename E::VariantList::template Nth<n>;
-
-                if(from.tag == n) {
-                    to->tag = n;
-                    ::new (&(to->storage)) T(*reinterpret_cast<T*>(&(from.storage)));
-                } else {
-                    CopyConstructorT<E, n + 1, m>::copy(std::forward<E>(from), to);
-                }
+            static void call(const Self& from, Self* to) {
+                to->tag = n;
+                ::new (&(to->storage)) T(*reinterpret_cast<T*>(&(from.storage)));
             }
         };
 
-        template<typename E, std::size_t n>
-        struct CopyConstructorT<E, n, n> {
-            static void copy(const E& from, E* to) {
-                using T = typename E::VariantList::template Nth<n>;
-
-                if(from.tag == n) {
-                    to->tag = n;
-                    ::new (&(to->storage)) T(*reinterpret_cast<T*>(&(from.storage)));
-                }
-            }
-        };
-
-        using CopyConstructor = CopyConstructorT<E, 0, E::variants - 1>;
+        using CopyConstructor = Helper<CopyConstructorT, const Self&, Self*>;
 
         // Move Constructor
-        template<typename E, std::size_t n, std::size_t m>
+        template<typename T, std::size_t n>
         struct MoveConstructorT {
-            static void move(E&& from, E* to) {
-                using T = typename E::VariantList::template Nth<n>;
-
-                if(from.tag == n) {
-                    to->tag = std::move(n);
-                    ::new (&(to->storage)) T(std::move(*reinterpret_cast<T*>(&(from.storage))));
-                } else {
-                    MoveConstructorT<E, n + 1, m>::move(std::forward<E>(from), to);
-                }
+            static void call(Self&& from, Self* to) {
+                to->tag = std::move(n);
+                ::new (&(to->storage)) T(std::move(*reinterpret_cast<T*>(&(from.storage))));
             }
         };
 
-        template<typename E, std::size_t n>
-        struct MoveConstructorT<E, n, n> {
-            static void move(E&& from, E* to) {
-                using T = typename E::VariantList::template Nth<n>;
-
-                if(from.tag == n) {
-                    to->tag = std::move(n);
-                    ::new (&(to->storage)) T(std::move(*reinterpret_cast<T*>(&(from.storage))));
-                }
-            }
-        };
-
-        using MoveConstructor = MoveConstructorT<E, 0, E::variants - 1>;
+        using MoveConstructor = Helper<MoveConstructorT, Self&&, Self*>;
 
         // Destructor
-        template<typename E, std::size_t n, std::size_t m>
+        template<typename T, std::size_t n>
         struct DestructorT {
-            static void destruct(E* e) {
-                using T = typename E::VariantList::template Nth<n>;
-
-                if(e->tag == n) {
-                    reinterpret_cast<T*>(&(e->storage))->~T();
-                } else {
-                    DestructorT<E, n + 1, m>::destruct(e);
-                }
+            static void call(Self* e) {
+                reinterpret_cast<T*>(&(e->storage))->~T();
             }
         };
 
-        template<typename E, std::size_t n>
-        struct DestructorT<E, n, n> {
-            static void destruct(E* e) {
-                using T = typename E::VariantList::template Nth<n>;
-
-                if(e->tag == n) {
-                    reinterpret_cast<T*>(&(e->storage))->~T();
-                }
-            }
-        };
-
-        using Destructor = DestructorT<E, 0, E::variants - 1>;
-
-        // Match
-        template<typename E, std::size_t n, std::size_t m, typename... Fs>
-        struct MatchT;
-
-        template<typename E, std::size_t n, std::size_t m, typename F, typename... Fs>
-        struct MatchT<E, n, m, F, Fs...> {
-            static auto match(E* e, F f, Fs... fs) {
-                using T = typename E::VariantList::template Nth<n>;
-
-                if(e->tag == n) {
-                    return f(*reinterpret_cast<T*>(&(e->storage)));
-                } else {
-                    return MatchT<E, n + 1, m, Fs...>::match(e, fs...);
-                }
-            }
-        };
-
-        template<typename E, std::size_t n, typename F>
-        struct MatchT<E, n, n, F> {
-            static auto match(E* e, F f) {
-                using T = typename E::VariantList::template Nth<n>;
-
-                if(e->tag == n) {
-                    return f(*reinterpret_cast<T*>(&(e->storage)));
-                }
-            }
-        };
-
-        template<typename... Fs>
-        using Match = MatchT<E, 0, E::variants - 1, Fs...>;
+        using Destructor = Helper<DestructorT, Self*>;
 
         // Apply
-        template<typename E, std::size_t n, std::size_t m, typename F>
+        template<typename T, std::size_t n>
         struct ApplyT {
-            static auto apply(E* e, F f) {
-                using T = typename E::VariantList::template Nth<n>;
-
-                if(e->tag == n) {
-                    return f(*reinterpret_cast<T*>(&(e->storage)));
-                } else {
-                    return ApplyT<E, n + 1, m, F>::apply(e, f);
-                }
-            }
-        };
-
-        template<typename E, std::size_t n, typename F>
-        struct ApplyT<E, n, n, F> {
-            static auto apply(E* e, F f) {
-                using T = typename E::VariantList::template Nth<n>;
-
-                if(e->tag == n) {
-                    return f(*reinterpret_cast<T*>(&(e->storage)));
-                }
+            template<typename F>
+            static auto call(Self* e, F f) {
+                return f(*reinterpret_cast<T*>(&(e->storage)));
             }
         };
 
         template<typename F>
-        using Apply = ApplyT<E, 0, E::variants, F>;
+        using Apply = Helper<ApplyT, Self*, F>;
+
+        // Match
+        template<typename T, std::size_t n, typename... Fs>
+        struct CallNth;
+
+        template<typename T, std::size_t n, typename F, typename... Fs>
+        struct CallNth<T, n, F, Fs...> {
+            static auto call(T t, F f, Fs... fs) {
+                return CallNth<T, n - 1, Fs...>::call(t, std::forward<Fs>(fs)...);
+            }
+        };
+
+        template<typename T, typename F, typename... Fs>
+        struct CallNth<T, 0, F, Fs...> {
+            static auto call(T t, F f, Fs... fs) {
+                return f(t);
+            }
+        };
+
+        template<typename T, std::size_t n>
+        struct MatchT {
+            template<typename... Fs>
+            static auto call(Self* e, Fs... fs) {
+                return CallNth<T, n, Fs...>::call(*reinterpret_cast<T*>(&(e->storage)), std::forward<Fs>(fs)...);
+            }
+        };
+
+        template<typename... Fs>
+        using Match = Helper<MatchT, Self*, Fs...>;
     };
 
     std::size_t tag;
@@ -231,41 +187,41 @@ public:
 
     template<typename... Args>
     EnumT(Args&&... args) {
-        impl<Self>::Constructor<Args...>::construct(this, std::forward<Args>(args)...);
+        impl::Constructor<Args...>::construct(this, std::forward<Args>(args)...);
     }
 
     EnumT(const Self& other) {
-        impl<Self>::CopyConstructor::copy(std::forward<Self>(other), this);
+        impl::CopyConstructor::call(other.tag, std::forward<Self>(other), this);
     }
 
     EnumT(Self&& other) noexcept {
-        impl<Self>::MoveConstructor::move(std::forward<Self>(other), this);
+        impl::MoveConstructor::call(other.tag, std::forward<Self>(other), this);
     }
 
     EnumT& operator=(const Self& other) {
-        impl<Self>::Destructor::destruct(this);
-        impl<Self>::CopyConstructor::copy(std::forward<Self>(other), this);
+        impl::Destructor::call(this->tag, this);
+        impl::CopyConstructor::call(other.tag, std::forward<Self>(other), this);
         return *this;
     }
 
     EnumT& operator=(Self&& other) noexcept {
-        impl<Self>::Destructor::destruct(this);
-        impl<Self>::MoveConstructor::move(std::forward<Self>(other), this);
+        impl::Destructor::call(this->tag, this);
+        impl::MoveConstructor::call(other.tag, std::forward<Self>(other), this);
         return *this;
     }
 
     template<typename F>
     auto apply(F f) {
-        return impl<Self>::Apply<F>::apply(this, std::forward<F>(f));
+        return impl::Apply<F>::call(this->tag, this, std::forward<F>(f));
     }
 
     template<typename... Fs>
     auto match(Fs... fs) {
-        return impl<Self>::Match<Fs...>::match(this, std::forward<Fs>(fs)...);
+        return impl::Match<Fs...>::call(this->tag, this, std::forward<Fs>(fs)...);
     }
 
     ~EnumT() {
-        impl<Self>::Destructor::destruct(this);
+        impl::Destructor::call(this->tag, this);
     }
 };
 

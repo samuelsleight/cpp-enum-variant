@@ -33,6 +33,8 @@ int main(int argc, char* argv[]) {
         std::cout << std::endl;
     }
 
+    Enum::Variant<int>::Variant<std::string>(7).apply([](auto a) { std::cout << a << std::endl; });
+
     // Optional Test
     auto a = Optional<int>::Some(6);
     if(a) {
