@@ -15,6 +15,8 @@ namespace impl {
 template<typename T>
 class Optional : public impl::OptionalBase<T> {
 public:
+    using ValueType = T;
+
     static Optional<T> Some(T t) {
         return Optional(t);
     }
@@ -24,14 +26,14 @@ public:
     }
 
     explicit operator bool() {
-        return match(
+        return this->match(
             [](::None) { return false; },
             [](T) { return true; }
         );
     }
 
     T get() {
-        return match(
+        return this->match(
             [](::None) -> T { throw std::runtime_error("Error: attempted get() on Optional::None"); },
             [](T t) { return t; }
         );
@@ -41,12 +43,22 @@ public:
     auto map(F f) {
         using U = decltype(f(get()));
 
-        return match(
+        return this->match(
             [](::None) { return Optional<U>::None(); },
             [&f](T t) { return Optional<U>::Some(f(t)); }
         );
     }
-private:
+
+    template<typename F>
+    auto and_then(F f) {
+        using U = decltype(f(get()))::ValueType;
+
+        return this->match(
+            [](::None) { return Optional<U>::None(); },
+            [&f](T t) { return f(t); }
+        );
+    }
+
     template<typename... Args>
     Optional(Args... args) : impl::OptionalBase<T>(std::forward<Args>(args)...) {}
 };
