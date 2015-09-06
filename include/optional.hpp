@@ -49,7 +49,7 @@ public:
 
     template<typename F>
     auto and_then(F f) {
-        using U = decltype(f(get()))::ValueType;
+        using U = typename decltype(f(get()))::ValueType;
 
         return this->match(
             [](::None) { return Optional<U>::None(); },

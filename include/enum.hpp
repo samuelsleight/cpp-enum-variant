@@ -71,9 +71,6 @@ private:
             }
         };
 
-        template<typename... Args>
-        using Constructor = ConstructorT<std::is_constructible<typename Self::VariantList::Head, Args...>::value, 0, Args...>;
-
         // Helper
         template<std::size_t n, std::size_t m, template<typename, std::size_t> typename F, typename... Args>
         struct HelperT {
@@ -111,8 +108,6 @@ private:
             }
         };
 
-        using CopyConstructor = Helper<CopyConstructorT, const Self&, Self*>;
-
         // Move Constructor
         template<typename T, std::size_t n>
         struct MoveConstructorT {
@@ -122,8 +117,6 @@ private:
             }
         };
 
-        using MoveConstructor = Helper<MoveConstructorT, Self&&, Self*>;
-
         // Destructor
         template<typename T, std::size_t n>
         struct DestructorT {
@@ -131,8 +124,6 @@ private:
                 reinterpret_cast<T*>(&(e->storage))->~T();
             }
         };
-
-        using Destructor = Helper<DestructorT, Self*>;
 
         // Apply
         template<typename T, std::size_t n>
@@ -142,9 +133,6 @@ private:
                 return f(*reinterpret_cast<T*>(&(e->storage)));
             }
         };
-
-        template<typename F>
-        using Apply = Helper<ApplyT, Self*, F>;
 
         // Match
         template<typename T, std::size_t n, typename... Fs>
@@ -171,10 +159,20 @@ private:
                 return CallNth<T, n, Fs...>::call(*reinterpret_cast<T*>(&(e->storage)), std::forward<Fs>(fs)...);
             }
         };
-
-        template<typename... Fs>
-        using Match = Helper<MatchT, Self*, Fs...>;
     };
+
+    template<typename... Args>
+    using Constructor = typename impl::template ConstructorT<std::is_constructible<typename Self::VariantList::Head, Args...>::value, 0, Args...>;
+
+    using CopyConstructor = typename impl::template Helper<impl::template CopyConstructorT, const Self&, Self*>;
+    using MoveConstructor = typename impl::template Helper<impl::template MoveConstructorT, Self&&, Self*>;
+    using Destructor = typename impl::template Helper<impl::template DestructorT, Self*>;
+
+    template<typename F>
+    using Apply = typename impl::template Helper<impl::template ApplyT, Self*, F>;
+
+    template<typename... Fs>
+    using Match = typename impl::template Helper<impl::template MatchT, Self*, Fs...>;
 
     std::size_t tag;
     StorageT storage;
@@ -187,41 +185,41 @@ public:
 
     template<typename... Args>
     EnumT(Args&&... args) {
-        impl::Constructor<Args...>::construct(this, std::forward<Args>(args)...);
+        Constructor<Args...>::construct(this, std::forward<Args>(args)...);
     }
 
     EnumT(const Self& other) {
-        impl::CopyConstructor::call(other.tag, std::forward<Self>(other), this);
+        CopyConstructor::call(other.tag, std::forward<Self>(other), this);
     }
 
     EnumT(Self&& other) noexcept {
-        impl::MoveConstructor::call(other.tag, std::forward<Self>(other), this);
+        MoveConstructor::call(other.tag, std::forward<Self>(other), this);
     }
 
     EnumT& operator=(const Self& other) {
-        impl::Destructor::call(this->tag, this);
-        impl::CopyConstructor::call(other.tag, std::forward<Self>(other), this);
+        Destructor::call(this->tag, this);
+        CopyConstructor::call(other.tag, std::forward<Self>(other), this);
         return *this;
     }
 
     EnumT& operator=(Self&& other) noexcept {
-        impl::Destructor::call(this->tag, this);
-        impl::MoveConstructor::call(other.tag, std::forward<Self>(other), this);
+        Destructor::call(this->tag, this);
+        MoveConstructor::call(other.tag, std::forward<Self>(other), this);
         return *this;
     }
 
     template<typename F>
     auto apply(F f) {
-        return impl::Apply<F>::call(this->tag, this, std::forward<F>(f));
+        return Apply<F>::call(this->tag, this, std::forward<F>(f));
     }
 
     template<typename... Fs>
     auto match(Fs... fs) {
-        return impl::Match<Fs...>::call(this->tag, this, std::forward<Fs>(fs)...);
+        return Match<Fs...>::call(this->tag, this, std::forward<Fs>(fs)...);
     }
 
     ~EnumT() {
-        impl::Destructor::call(this->tag, this);
+        Destructor::call(this->tag, this);
     }
 };
 
