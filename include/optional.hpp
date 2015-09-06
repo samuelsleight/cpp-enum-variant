@@ -37,6 +37,15 @@ public:
         );
     }
 
+    template<typename F>
+    auto map(F f) {
+        using U = decltype(f(get()));
+
+        return match(
+            [](::None) { return Optional<U>::None(); },
+            [&f](T t) { return Optional<U>::Some(f(t)); }
+        );
+    }
 private:
     template<typename... Args>
     Optional(Args... args) : impl::OptionalBase<T>(std::forward<Args>(args)...) {}

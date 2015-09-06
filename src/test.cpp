@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
     v.emplace_back(7);
     v.emplace_back("Hello");
     v.emplace_back(5);
-    v.emplace_back(5, 'a');
+	v.emplace_back(Thing{5, 'a'});
 
     for(auto& t : v) {
         std::cout << t.tag << std::endl;
@@ -45,4 +45,10 @@ int main(int argc, char* argv[]) {
     } catch(std::exception& e) {
         std::cout << e.what() << std::endl;
     }
+
+    std::string s = a.map([](int i) { return std::to_string(i); }).match(
+        [](None) { return std::string(""); },
+        [](std::string s) { return s; }
+    );
+    std::cout << "result: " << s;
 }
