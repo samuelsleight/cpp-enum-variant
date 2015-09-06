@@ -24,8 +24,6 @@ int main(int argc, char* argv[]) {
 	v.emplace_back(Thing{5, 'a'});
 
     for(auto& t : v) {
-        std::cout << t.tag << std::endl;
-
         t.match(
             [](std::string& s) { std::cout << "string: " << s << std::endl; },
             [](int& i) { std::cout << "int: " << i << std::endl; },
