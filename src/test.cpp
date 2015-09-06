@@ -1,5 +1,6 @@
 #include "enum.hpp"
 #include "optional.hpp"
+#include "tree.hpp"
 
 #include <iostream>
 #include <string>
@@ -23,8 +24,6 @@ int main(int argc, char* argv[]) {
 	v.emplace_back(Thing{5, 'a'});
 
     for(auto& t : v) {
-        std::cout << t.tag << std::endl;
-
         t.match(
             [](std::string& s) { std::cout << "string: " << s << std::endl; },
             [](int& i) { std::cout << "int: " << i << std::endl; },
@@ -33,6 +32,8 @@ int main(int argc, char* argv[]) {
 
         std::cout << std::endl;
     }
+
+    Enum::Variant<int>::Variant<std::string>(7).apply([](auto a) { std::cout << a << std::endl; });
 
     // Optional Test
     auto a = Optional<int>::Some(6);
@@ -50,5 +51,21 @@ int main(int argc, char* argv[]) {
         [](None) { return std::string(""); },
         [](std::string s) { return s; }
     );
-    std::cout << "result: " << s;
+    std::cout << "result: " << s << std::endl;
+
+    a.and_then([](int i) { return Optional<float>::None(); });
+
+    std::cout << std::endl;
+
+    // Tree Test
+    Tree<int> tree;
+    tree.insert(5);
+    tree.insert(2);
+    tree.insert(7);
+    tree.insert(3);
+    tree.insert(19);
+    tree.apply([](int i) { std::cout << i << std::endl; });
+
+    std::cout << tree.contains(19) << std::endl;
+    std::cout << tree.contains(8) << std::endl;
 }

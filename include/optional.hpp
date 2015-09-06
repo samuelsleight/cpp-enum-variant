@@ -7,14 +7,14 @@
 
 struct None {};
 
-namespace impl {
-    template<typename T>
-    using OptionalBase = Enum::Variant<::None>::Variant<T>;
-}
+template<typename T>
+using OptionalBase = Enum::Variant<::None>::Variant<T>;
 
 template<typename T>
-class Optional : public impl::OptionalBase<T> {
+class Optional : public OptionalBase<T> {
 public:
+    using ValueType = T;
+
     static Optional<T> Some(T t) {
         return Optional(t);
     }
@@ -47,8 +47,18 @@ public:
         );
     }
 
+    template<typename F>
+    auto and_then(F f) {
+        using U = decltype(f(get()))::ValueType;
+
+        return this->match(
+            [](::None) { return Optional<U>::None(); },
+            [&f](T t) { return f(t); }
+        );
+    }
+
     template<typename... Args>
-    Optional(Args... args) : impl::OptionalBase<T>(std::forward<Args>(args)...) {}
+    Optional(Args... args) : OptionalBase<T>(std::forward<Args>(args)...) {}
 };
 
 #endif
