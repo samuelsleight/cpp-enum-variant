@@ -18,14 +18,18 @@ constexpr T const_max(T a, T b, Args... args) {
 }
 
 // Variadic Or
-constexpr auto const_or(bool b) {
-    return b;
-}
-
 template<typename... Args>
-constexpr auto const_or(bool b, Args... args) {
-    return b || const_or(args...);
-}
+struct Or;
+
+template<typename T, typename... Args>
+struct Or<T, Args...> {
+    static constexpr bool value = T::value || Or<Args...>::value;
+};
+
+template<typename T>
+struct Or<T> {
+    static constexpr bool value = T::value;
+};
 
 // TypeList 
 template<typename T, std::size_t n>
@@ -188,7 +192,7 @@ private:
 
     template<typename... Args>
     using Constructor = typename std::conditional<
-        const_or(impl::template TypeCheck<VariantT, Args...>::value, impl::template TypeCheck<Variants, Args...>::value...),
+        Or<typename impl::template TypeCheck<VariantT, Args...>, typename impl::template TypeCheck<Variants, Args...>...>::value,
         typename impl::template ConstructorT<impl::template TypeCheck, impl::template TypeCheck<VariantT, Args...>::value, 0, Args...>,
         typename impl::template ConstructorT<std::is_constructible, std::is_constructible<VariantT, Args...>::value, 0, Args...>
     >::type;
