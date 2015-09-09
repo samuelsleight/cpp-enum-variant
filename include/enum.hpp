@@ -2,6 +2,7 @@
 #define ENUM_ENUM_HPP
 
 #include <algorithm>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 
@@ -114,6 +115,8 @@ private:
 
                 if(tag == n) {
                     return F<T, n>::call(std::forward<Args>(args)...);
+                } else {
+                    throw std::runtime_error("Invalid tag, something has gone horribly wrong");
                 }
             }
         };
