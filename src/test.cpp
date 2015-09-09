@@ -35,10 +35,36 @@ int main(int argc, char* argv[]) {
 
     Enum::Variant<int>::Variant<std::string>(7).apply([](auto a) { std::cout << a << std::endl; });
 
+    using Test2 = Enum::Variant<int*>::Variant<int>::Variant<char>;
+
+    int z = 67;
+
+    Test2 a(5);
+    Test2 b('c');
+    Test2 ptr(&z);
+
+    a.match(
+        [](int* i) { std::cout << "int* " << *i << std::endl; },
+        [](int& i) { std::cout << "int: " << i << std::endl; },
+        [](char& c) { std::cout << "char: " << c << std::endl; }
+    );
+
+    b.match(
+        [](int* i) { std::cout << "int* " << *i << std::endl; },
+        [](int& i) { std::cout << "int: " << i << std::endl; },
+        [](char& c) { std::cout << "char: " << c << std::endl; }
+    );
+
+    ptr.match(
+        [](int* i) { std::cout << "int* " << *i << std::endl; },
+        [](int& i) { std::cout << "int: " << i << std::endl; },
+        [](char& c) { std::cout << "char: " << c << std::endl; }
+    );
+
     // Optional Test
-    auto a = Optional<int>::Some(6);
-    if(a) {
-        std::cout << a.get() << std::endl;
+    auto o = Optional<int>::Some(6);
+    if(o) {
+        std::cout << o.get() << std::endl;
     }
 
     try {
@@ -47,13 +73,13 @@ int main(int argc, char* argv[]) {
         std::cout << e.what() << std::endl;
     }
 
-    std::string s = a.map([](int i) { return std::to_string(i); }).match(
+    std::string s = o.map([](int i) { return std::to_string(i); }).match(
         [](None) { return std::string(""); },
         [](std::string s) { return s; }
     );
     std::cout << "result: " << s << std::endl;
 
-    a.and_then([](int i) { return Optional<float>::None(); });
+    o.and_then([](int i) { return Optional<float>::None(); });
 
     std::cout << std::endl;
 

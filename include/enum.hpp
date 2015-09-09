@@ -16,6 +16,16 @@ constexpr T const_max(T a, T b, Args... args) {
     return a > b ? const_max(a, args...) : const_max(b, args...);
 }
 
+// Variadic Or
+constexpr auto const_or(bool b) {
+    return b;
+}
+
+template<typename... Args>
+constexpr auto const_or(bool b, Args... args) {
+    return b || const_or(args...);
+}
+
 // TypeList 
 template<typename T, std::size_t n>
 struct NthImpl : public NthImpl<typename T::Tail, n - 1> {};
@@ -37,6 +47,7 @@ struct TypeList<H, Ts...> {
     using Nth = typename NthImpl<TypeList<H, Ts...>, n>::value;
 };
 
+// Enum implementation
 template<typename VariantT, typename... Variants>
 class EnumT {
 public:
@@ -54,21 +65,32 @@ private:
     // Implementation detail
     struct impl {
         // Constructor
-        template<bool enable, std::size_t n, typename... Args>
+        template<template<typename...> typename Check, bool enable, std::size_t n, typename... Args>
         struct ConstructorT;
 
-        template<std::size_t n, typename... Args>
-        struct ConstructorT<false, n, Args...> 
-            : public ConstructorT<std::is_constructible<typename Self::VariantList::template Nth<n + 1>, Args...>::value, n + 1, Args...> {};
+        template<template<typename...> typename Check, std::size_t n, typename... Args>
+        struct ConstructorT<Check, false, n, Args...> 
+            : public ConstructorT<Check, Check<typename Self::VariantList::template Nth<n + 1>, Args...>::value, n + 1, Args...> {};
 
-        template<std::size_t n, typename... Args>
-        struct ConstructorT<true, n, Args...> {
+        template<template<typename...> typename Check, std::size_t n, typename... Args>
+        struct ConstructorT<Check, true, n, Args...> {
             static void construct(Self* e, Args&&... args) {
                 using T = typename Self::VariantList::template Nth<n>;
 
                 ::new (&(e->storage)) T(std::forward<Args>(args)...);
                 e->tag = n;
             }
+        };
+
+        // Type Check for Constructor
+        template<typename T, typename... Args>
+        struct TypeCheck {
+            static constexpr bool value = false;
+        };
+
+        template<typename T, typename U>
+        struct TypeCheck<T, U> {
+            static constexpr bool value = std::is_same<typename std::decay<T>::type, typename std::decay<U>::type>::value && std::is_constructible<T, U>::value;
         };
 
         // Helper
@@ -162,7 +184,11 @@ private:
     };
 
     template<typename... Args>
-    using Constructor = typename impl::template ConstructorT<std::is_constructible<typename Self::VariantList::Head, Args...>::value, 0, Args...>;
+    using Constructor = typename std::conditional<
+        const_or(impl::template TypeCheck<VariantT, Args...>::value, impl::template TypeCheck<Variants, Args...>::value...),
+        typename impl::template ConstructorT<impl::template TypeCheck, impl::template TypeCheck<VariantT, Args...>::value, 0, Args...>,
+        typename impl::template ConstructorT<std::is_constructible, std::is_constructible<VariantT, Args...>::value, 0, Args...>
+    >::type;
 
     using CopyConstructor = typename impl::template Helper<impl::template CopyConstructorT, const Self&, Self*>;
     using MoveConstructor = typename impl::template Helper<impl::template MoveConstructorT, Self&&, Self*>;
