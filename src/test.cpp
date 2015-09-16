@@ -12,7 +12,7 @@ struct Thing {
 };
 
 int main(int argc, char* argv[]) {
-    using Test = Enum
+    using Test = venum::Enum
         ::Variant<std::string>
         ::Variant<int>
         ::Variant<Thing>;
@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
     v.emplace_back(7);
     v.emplace_back("Hello");
     v.emplace_back(5);
-	v.emplace_back(Thing{5, 'a'});
+	v.emplace_back(5, 'a');
 
     for(auto& t : v) {
         t.match(
@@ -33,9 +33,9 @@ int main(int argc, char* argv[]) {
         std::cout << std::endl;
     }
 
-    Enum::Variant<int>::Variant<std::string>(7).apply([](auto a) { std::cout << a << std::endl; });
+    venum::Enum::Variant<int>::Variant<std::string>(7).apply([](auto a) { std::cout << a << std::endl; });
 
-    using Test2 = Enum::Variant<int*>::Variant<int>::Variant<char>;
+    using Test2 = venum::Enum::Variant<int*>::Variant<int>::Variant<char>;
 
     int z = 67;
 
@@ -56,6 +56,12 @@ int main(int argc, char* argv[]) {
     );
 
     ptr.match(
+        [](int* i) { std::cout << "int* " << *i << std::endl; },
+        [](int& i) { std::cout << "int: " << i << std::endl; },
+        [](char& c) { std::cout << "char: " << c << std::endl; }
+    );
+
+    Test2::construct<char>(47).match(
         [](int* i) { std::cout << "int* " << *i << std::endl; },
         [](int& i) { std::cout << "int: " << i << std::endl; },
         [](char& c) { std::cout << "char: " << c << std::endl; }
@@ -94,4 +100,6 @@ int main(int argc, char* argv[]) {
 
     std::cout << tree.contains(19) << std::endl;
     std::cout << tree.contains(8) << std::endl;
+
+    []() {}();
 }

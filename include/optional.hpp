@@ -8,7 +8,7 @@
 struct None {};
 
 template<typename T>
-using OptionalBase = Enum::Variant<::None>::Variant<T>;
+using OptionalBase = venum::Enum::Variant<::None>::Variant<T>;
 
 template<typename T>
 class Optional : public OptionalBase<T> {

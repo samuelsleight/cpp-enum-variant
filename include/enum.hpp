@@ -6,6 +6,22 @@
 #include <type_traits>
 #include <utility>
 
+namespace venum {
+
+// Index of T in Ts
+template<typename, typename...>
+struct IndexOf;
+
+template<typename T, typename U, typename... Ts>
+struct IndexOf<T, U, Ts...> {
+    static constexpr int value = 1 + IndexOf<T, Ts...>::value;
+};
+
+template<typename T, typename... Ts>
+struct IndexOf<T, T, Ts...> {
+    static constexpr int value = 0;
+};
+
 // Variadic Max
 template<typename T>
 constexpr auto const_max(T a) {
@@ -59,7 +75,7 @@ public:
     static constexpr std::size_t storage_size = const_max(sizeof(VariantT), sizeof(Variants)...);
     static constexpr std::size_t storage_align = const_max(alignof(VariantT), alignof(Variants)...);
 
-    static constexpr std::size_t variants = sizeof...(Variants) + 1;
+    static constexpr std::size_t variants = sizeof...(Variants)+1;
 
 private:
     using Self = EnumT<VariantT, Variants...>;
@@ -74,7 +90,7 @@ private:
         struct ConstructorT;
 
         template<template<typename...> typename Check, std::size_t n, typename... Args>
-        struct ConstructorT<Check, false, n, Args...> 
+        struct ConstructorT<Check, false, n, Args...>
             : public ConstructorT<Check, Check<typename Self::VariantList::template Nth<n + 1>, Args...>::value, n + 1, Args...> {};
 
         template<template<typename...> typename Check, std::size_t n, typename... Args>
@@ -210,11 +226,20 @@ private:
     std::size_t tag;
     StorageT storage;
 
+    // Private default constructor, for construct<T>
+    EnumT() : storage() {}
+
 public:
     template<typename T>
     using Variant = EnumT<VariantT, Variants..., T>;
 
-    EnumT() = delete;
+    template<typename T, typename... Args>
+    static Self construct(Args&&... args) {
+        EnumT ret;
+        ret.tag = IndexOf<T, VariantT, Variants...>::value;
+        ::new (&(ret.storage)) T(std::forward<Args>(args)...);
+        return ret;
+    }
 
     template<typename... Args>
     EnumT(Args&&... args) {
@@ -230,13 +255,19 @@ public:
     }
 
     EnumT& operator=(const Self& other) {
-        Destructor::call(this->tag, this);
+        if(this->tag != other.tag) {
+            Destructor::call(this->tag, this);
+        }
+
         CopyConstructor::call(other.tag, std::forward<Self>(other), this);
         return *this;
     }
 
     EnumT& operator=(Self&& other) noexcept {
-        Destructor::call(this->tag, this);
+        if(this->tag != other.tag) {
+            Destructor::call(this->tag, this);
+        }
+
         MoveConstructor::call(other.tag, std::forward<Self>(other), this);
         return *this;
     }
@@ -262,5 +293,7 @@ public:
     template<typename T>
     using Variant = EnumT<T>;
 };
+
+}
 
 #endif
