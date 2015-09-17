@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <string>
+#include <sstream>
 #include <vector>
 
 struct Thing {
@@ -42,6 +43,7 @@ int main(int argc, char* argv[]) {
     Test2 a(5);
     Test2 b('c');
     Test2 ptr(&z);
+    auto c = Test2::construct<char>(47);
 
     a.match(
         [](int* i) { std::cout << "int* " << *i << std::endl; },
@@ -61,11 +63,27 @@ int main(int argc, char* argv[]) {
         [](char& c) { std::cout << "char: " << c << std::endl; }
     );
 
-    Test2::construct<char>(47).match(
+    std::string s2 = a.match(
+        [](int* i) { std::ostringstream str; str << "int*: " << i; return str.str(); },
+        [](int i) { std::ostringstream str; str << "int: " << i; return str.str(); },
+        [](char c) { std::ostringstream str; str << "char: " << c; return str.str(); }
+    );
+
+    c.match(
         [](int* i) { std::cout << "int* " << *i << std::endl; },
         [](int& i) { std::cout << "int: " << i << std::endl; },
         [](char& c) { std::cout << "char: " << c << std::endl; }
     );
+
+    std::cout << c.which() << " " << c.contains<char>() << " " << c.contains<int>() << std::endl;
+
+    try {
+        std::cout << "not a real int: " << c.get<int>() << std::endl;
+    } catch(std::exception& e) {
+        std::cout << e.what() << std::endl;
+    }
+
+    std::cout << "not a real int: " << c.get_unchecked<int>() << std::endl;
 
     // Optional Test
     auto o = Optional<int>::Some(6);

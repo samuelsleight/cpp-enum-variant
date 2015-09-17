@@ -272,14 +272,43 @@ public:
         return *this;
     }
 
+    // Apply the object to a polymorphic function
     template<typename F>
     auto apply(F f) {
         return Apply<F>::call(this->tag, this, std::forward<F>(f));
     }
 
+    // Apply to a function based on the contained type
     template<typename... Fs>
     auto match(Fs... fs) {
         return Match<Fs...>::call(this->tag, this, std::forward<Fs>(fs)...);
+    }
+
+    // Returns the identifying tag
+    std::size_t which() {
+        return tag;
+    }
+
+    // Returns true if the contained value is of type T
+    template<typename T>
+    bool contains() {
+        return tag == IndexOf<T, VariantT, Variants...>::value;
+    }
+
+    // Returns the object as the specified type, or throws
+    template<typename T>
+    T& get() {
+        if(tag == IndexOf<T, VariantT, Variants...>::value) {
+            return *reinterpret_cast<T*>(&storage);
+        } else {
+            throw std::runtime_error("Attempted get<T> on incorrect type");
+        }
+    }
+
+    // I don't recommend this function
+    template<typename T>
+    T& get_unchecked() {
+        return *reinterpret_cast<T*>(&storage);
     }
 
     ~EnumT() {
