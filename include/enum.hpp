@@ -68,6 +68,19 @@ struct TypeList<H, Ts...> {
     using Nth = typename NthImpl<TypeList<H, Ts...>, n>::value;
 };
 
+// Error Handling
+enum InvalidReason {
+    CopyThrew,
+    MoveThrew,
+    MovedFrom,
+};
+
+struct InvalidVariant : std::runtime_error {
+    InvalidVariant(const std::size_t reason) : std::runtime_error("Attempted usage of invalidated variant"), reason(reason) {}
+
+    std::size_t reason;
+};
+
 // Enum implementation
 template<typename VariantT, typename... Variants>
 class EnumT {
@@ -75,7 +88,7 @@ public:
     static constexpr std::size_t storage_size = const_max(sizeof(VariantT), sizeof(Variants)...);
     static constexpr std::size_t storage_align = const_max(alignof(VariantT), alignof(Variants)...);
 
-    static constexpr std::size_t variants = sizeof...(Variants)+1;
+    static constexpr std::size_t variants = sizeof...(Variants) + 1;
 
 private:
     using Self = EnumT<VariantT, Variants...>;
@@ -136,7 +149,7 @@ private:
                 if(tag == n) {
                     return F<T, n>::call(std::forward<Args>(args)...);
                 } else {
-                    throw std::runtime_error("Invalid tag, something has gone horribly wrong");
+                    return F<T, n>::invalid(tag, std::forward<Args>(args)...);
                 }
             }
         };
@@ -149,7 +162,16 @@ private:
         struct CopyConstructorT {
             static void call(const Self& from, Self* to) {
                 to->tag = n;
-                ::new (&(to->storage)) T(*reinterpret_cast<T*>(&(from.storage)));
+
+                try {
+                    ::new (&(to->storage)) T(*reinterpret_cast<T*>(&(from.storage)));
+                } catch(std::exception&) {
+                    to->tag = to->variants + InvalidReason::CopyThrew;
+                }
+            }
+
+            static void invalid(const std::size_t& tag, const Self& from, Self* to) {
+                to->tag = from.tag;
             }
         };
 
@@ -157,8 +179,19 @@ private:
         template<typename T, std::size_t n>
         struct MoveConstructorT {
             static void call(Self&& from, Self* to) {
-                to->tag = std::move(n);
-                ::new (&(to->storage)) T(std::move(*reinterpret_cast<T*>(&(from.storage))));
+                to->tag = n;
+                from.tag = from.variants + InvalidReason::MovedFrom;
+
+                try {
+                    ::new (&(to->storage)) T(std::move(*reinterpret_cast<T*>(&(from.storage))));
+                } catch(std::exception&) {
+                    to->tag = to->variants + InvalidReason::MoveThrew;
+                }
+            }
+
+            static void invalid(const std::size_t& tag, Self&& from, Self* to) {
+                to->tag = from.tag;
+                from.tag = from.variants + InvalidReason::MovedFrom;
             }
         };
 
@@ -168,6 +201,8 @@ private:
             static void call(Self* e) {
                 reinterpret_cast<T*>(&(e->storage))->~T();
             }
+
+            static void invalid(const std::size_t& tag, Self* e) {}
         };
 
         // Apply
@@ -176,6 +211,11 @@ private:
             template<typename F>
             static auto call(Self* e, F f) {
                 return f(*reinterpret_cast<T*>(&(e->storage)));
+            }
+
+            template<typename F>
+            static auto invalid(const std::size_t& tag, Self* e, F f) -> decltype(f(*(T*)nullptr)) {
+                throw InvalidVariant(tag - e->variants);
             }
         };
 
@@ -188,6 +228,10 @@ private:
             static auto call(T t, F f, Fs... fs) {
                 return CallNth<T, n - 1, Fs...>::call(t, std::forward<Fs>(fs)...);
             }
+
+            static auto invalid(const std::size_t& tag, F f, Fs... fs) {
+                return CallNth<T, n - 1, Fs...>::invalid(tag, std::forward<Fs>(fs)...);
+            }
         };
 
         template<typename T, typename F, typename... Fs>
@@ -195,13 +239,52 @@ private:
             static auto call(T t, F f, Fs... fs) {
                 return f(t);
             }
+
+            static auto invalid(const std::size_t& tag, F f, Fs... fs) {
+                return f(InvalidVariant(tag - Self::variants));
+            }
+        };
+
+        template<typename T, std::size_t n, bool no_check, typename... Fs>
+        struct MatchTBase;
+
+        template<typename T, std::size_t n, typename... Fs>
+        struct MatchTBase<T, n, true, Fs...> {
+            static auto call(Self* e, Fs... fs) {
+                return CallNth<T, n, Fs...>::call(*reinterpret_cast<T*>(&(e->storage)), std::forward<Fs>(fs)...);
+            }
+
+            static auto invalid(const std::size_t& tag, Self* e, Fs... fs) 
+                -> decltype(CallNth<T, n, Fs...>::call(*(T*)nullptr, fs...)) {
+
+                throw InvalidVariant(tag - e->variants);
+            }
+        };
+
+        template<typename T, std::size_t n, typename... Fs>
+        struct MatchTBase<T, n, false, Fs...> {
+            static auto call(Self* e, Fs... fs) {
+                return CallNth<T, n, Fs...>::call(*reinterpret_cast<T*>(&(e->storage)), std::forward<Fs>(fs)...);
+            }
+
+            static auto invalid(const std::size_t& tag, Self* e, Fs... fs) {
+                return CallNth<T, variants, Fs...>::invalid(tag, std::forward<Fs>(fs)...);
+            }
         };
 
         template<typename T, std::size_t n>
         struct MatchT {
             template<typename... Fs>
+            using Base = MatchTBase<T, n, sizeof...(Fs) == 1 + sizeof...(Variants), Fs...>;
+
+            template<typename... Fs>
             static auto call(Self* e, Fs... fs) {
-                return CallNth<T, n, Fs...>::call(*reinterpret_cast<T*>(&(e->storage)), std::forward<Fs>(fs)...);
+                return Base<Fs...>::call(e, std::forward<Fs>(fs)...);
+            }
+
+            template<typename... Fs>
+            static auto invalid(const std::size_t& tag, Self* e, Fs... fs) {
+                return Base<Fs...>::invalid(tag, e, std::forward<Fs>(fs)...);
             }
         };
     };
