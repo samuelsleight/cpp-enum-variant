@@ -12,7 +12,59 @@ struct Thing {
     char c;
 };
 
+struct BadThing {
+    std::string str;
+
+    BadThing(std::string str) : str(str) {}
+
+    BadThing(const BadThing& other) {
+        throw std::runtime_error("lol");
+    }
+};
+
+void exception_test() {
+    using Test = venum::Enum
+        ::Variant<BadThing>
+        ::Variant<std::string>;
+
+    Test test(std::string{"hello"});
+    test = "u wot m8";
+
+    test.match(
+        [](BadThing& thing) { std::cout << "thing: " << thing.str << std::endl; },
+        [](std::string& s) { std::cout << "s: " << s << std::endl; },
+        [](const venum::InvalidVariant& iv) { std::cout << "invalid: " << iv.what() << ": " << iv.reason << std::endl; }
+    );
+
+    try {
+        test.match(
+            [](BadThing& thing) { std::cout << "thing: " << thing.str << std::endl; },
+            [](std::string& s) { std::cout << "s: " << s << std::endl; }
+        );
+    } catch(std::exception& e) {
+        std::cout << e.what() << std::endl;
+    }
+
+    Test test2(std::string{"hello2"});
+
+    Test test3 = std::move(test2);
+
+    test2.match(
+        [](BadThing& thing) { std::cout << "thing: " << thing.str << std::endl; },
+        [](std::string& s) { std::cout << "s: " << s << std::endl; },
+        [](const venum::InvalidVariant& iv) { std::cout << "invalid: " << iv.what() << ": " << iv.reason << std::endl; }
+    );
+
+    test3.match(
+        [](BadThing& thing) { std::cout << "thing: " << thing.str << std::endl; },
+        [](std::string& s) { std::cout << "s: " << s << std::endl; },
+        [](const venum::InvalidVariant& iv) { std::cout << "invalid: " << iv.what() << ": " << iv.reason << std::endl; }
+    );
+}
+
 int main(int argc, char* argv[]) {
+    exception_test();
+
     using Test = venum::Enum
         ::Variant<std::string>
         ::Variant<int>
