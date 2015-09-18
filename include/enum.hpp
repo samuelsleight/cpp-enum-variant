@@ -69,60 +69,44 @@ struct TypeList<H, Ts...> {
 };
 
 // Error Handling
-enum InvalidReason {
-    CopyThrew,
-    MoveThrew,
-    MovedFrom,
-    Unknown
-};
+// X macro for error states
+#define VARIANT_ERROR_EXPAND \
+VARIANT_ERROR_X(CopyThrew, VariantCopyThrew, "Variant invalidated after copy constructor throw") \
+VARIANT_ERROR_X(MoveThrew, VariantMoveThrew, "Variant invalidated after move constructor throw") \
+VARIANT_ERROR_X(MovedFrom, VariandMovedFrom, "Variant invalidated after being moved from") \
+VARIANT_ERROR_X(Unknown, UnknownVariantError, "Variant invalidated after copy constructor throw")
 
+// Error state enum
+#define VARIANT_ERROR_X(name, error, msg) name,
+enum InvalidReason {
+    VARIANT_ERROR_EXPAND
+};
+#undef VARIANT_ERROR_X
+
+// Base exception class
 struct InvalidVariantError : public std::exception {
     InvalidVariantError() : std::exception() {}
 
-    virtual InvalidReason reason() const noexcept {
-        return InvalidReason::Unknown;
-    }
-
-    virtual const char* what() const noexcept {
-        return "Variant invalidated for unknown reason";
-    }
+    virtual InvalidReason reason() const noexcept = 0;
+    virtual const char* what() const noexcept = 0;
 };
 
-struct VariantCopyThrew : public InvalidVariantError {
-    VariantCopyThrew() : InvalidVariantError() {}
-
-    InvalidReason reason() const noexcept {
-        return InvalidReason::CopyThrew;
-    }
-
-    const char* what() const noexcept {
-        return "Variant invalidated after copy constructor throw";
-    }
+// Error state exceptions
+#define VARIANT_ERROR_X(name, error, msg) \
+struct error : public InvalidVariantError { \
+    error() : InvalidVariantError() {} \
+\
+    InvalidReason reason() const noexcept { \
+        return InvalidReason::name; \
+    } \
+\
+    const char* what() const noexcept { \
+        return msg; \
+    } \
 };
 
-struct VariantMoveThrew : public InvalidVariantError {
-    VariantMoveThrew() : InvalidVariantError() {}
-
-    InvalidReason reason() const noexcept {
-        return InvalidReason::MoveThrew;
-    }
-
-    const char* what() const noexcept {
-        return "Variant invalidated after move constructor throw";
-    }
-};
-
-struct VariantMovedFrom : public InvalidVariantError {
-    VariantMovedFrom() : InvalidVariantError() {}
-
-    InvalidReason reason() const noexcept {
-        return InvalidReason::MovedFrom;
-    }
-
-    const char* what() const noexcept {
-        return "Variant invalidated after being moved from";
-    }
-};
+VARIANT_ERROR_EXPAND
+#undef VARIANT_ERROR_X
 
 // Enum implementation
 template<typename VariantT, typename... Variants>
@@ -258,19 +242,13 @@ private:
 
             template<typename F>
             static auto invalid(const std::size_t& tag, Self* e, F f) -> decltype(f(*(T*)nullptr)) {
+                #define VARIANT_ERROR_X(name, error, msg) case InvalidReason::name: throw error();
+                
                 switch(tag - e->variants) {
-                    case InvalidReason::CopyThrew:
-                        throw VariantCopyThrew();
-
-                    case InvalidReason::MoveThrew:
-                        throw VariantMoveThrew();
-
-                    case InvalidReason::MovedFrom:
-                        throw VariantMovedFrom();
-
-                    default:
-                        throw InvalidVariantError();
+                    VARIANT_ERROR_EXPAND
                 }
+
+                #undef VARIANT_ERROR_X
             }
         };
 
@@ -296,19 +274,13 @@ private:
             }
 
             static auto invalid(const std::size_t& tag, F f, Fs... fs) {
+                #define VARIANT_ERROR_X(name, error, msg) case InvalidReason::name: return f(error());
+
                 switch(tag - variants) {
-                    case InvalidReason::CopyThrew:
-                        return f(VariantCopyThrew());
-
-                    case InvalidReason::MoveThrew:
-                        return f(VariantMoveThrew());
-
-                    case InvalidReason::MovedFrom:
-                        return f(VariantMovedFrom());
-
-                    default:
-                        return f(InvalidVariantError());
+                    VARIANT_ERROR_EXPAND
                 }
+
+                #undef VARIANT_ERROR_X
             }
         };
 
@@ -324,19 +296,13 @@ private:
             static auto invalid(const std::size_t& tag, Self* e, Fs... fs) 
                 -> decltype(CallNth<T, n, Fs...>::call(*(T*)nullptr, fs...)) {
 
+                #define VARIANT_ERROR_X(name, error, msg) case InvalidReason::name: throw error();
+                
                 switch(tag - e->variants) {
-                    case InvalidReason::CopyThrew:
-                        throw VariantCopyThrew();
-
-                    case InvalidReason::MoveThrew:
-                        throw VariantMoveThrew();
-
-                    case InvalidReason::MovedFrom:
-                        throw VariantMovedFrom();
-
-                    default:
-                        throw InvalidVariantError();
+                    VARIANT_ERROR_EXPAND
                 }
+
+                #undef VARIANT_ERROR_X
             }
         };
 
@@ -496,5 +462,7 @@ public:
 };
 
 }
+
+#undef VARIANT_ERROR_EXPAND
 
 #endif
