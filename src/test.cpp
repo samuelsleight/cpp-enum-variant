@@ -33,7 +33,7 @@ void exception_test() {
     test.match(
         [](BadThing& thing) { std::cout << "thing: " << thing.str << std::endl; },
         [](std::string& s) { std::cout << "s: " << s << std::endl; },
-        [](const venum::InvalidVariant& iv) { std::cout << "invalid: " << iv.what() << ": " << iv.reason << std::endl; }
+        [](const venum::InvalidVariantError& iv) { std::cout << "invalid: " << iv.what() << ": " << iv.reason() << std::endl; }
     );
 
     try {
@@ -52,13 +52,13 @@ void exception_test() {
     test2.match(
         [](BadThing& thing) { std::cout << "thing: " << thing.str << std::endl; },
         [](std::string& s) { std::cout << "s: " << s << std::endl; },
-        [](const venum::InvalidVariant& iv) { std::cout << "invalid: " << iv.what() << ": " << iv.reason << std::endl; }
+        [](const venum::InvalidVariantError& iv) { std::cout << "invalid: " << iv.what() << ": " << iv.reason() << std::endl; }
     );
 
     test3.match(
         [](BadThing& thing) { std::cout << "thing: " << thing.str << std::endl; },
         [](std::string& s) { std::cout << "s: " << s << std::endl; },
-        [](const venum::InvalidVariant& iv) { std::cout << "invalid: " << iv.what() << ": " << iv.reason << std::endl; }
+        [](const venum::InvalidVariantError& iv) { std::cout << "invalid: " << iv.what() << ": " << iv.reason() << std::endl; }
     );
 }
 

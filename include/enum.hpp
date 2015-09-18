@@ -73,12 +73,55 @@ enum InvalidReason {
     CopyThrew,
     MoveThrew,
     MovedFrom,
+    Unknown
 };
 
-struct InvalidVariant : std::runtime_error {
-    InvalidVariant(const std::size_t reason) : std::runtime_error("Attempted usage of invalidated variant"), reason(reason) {}
+struct InvalidVariantError : public std::exception {
+    InvalidVariantError() : std::exception() {}
 
-    std::size_t reason;
+    virtual InvalidReason reason() const noexcept {
+        return InvalidReason::Unknown;
+    }
+
+    virtual const char* what() const noexcept {
+        return "Variant invalidated for unknown reason";
+    }
+};
+
+struct VariantCopyThrew : public InvalidVariantError {
+    VariantCopyThrew() : InvalidVariantError() {}
+
+    InvalidReason reason() const noexcept {
+        return InvalidReason::CopyThrew;
+    }
+
+    const char* what() const noexcept {
+        return "Variant invalidated after copy constructor throw";
+    }
+};
+
+struct VariantMoveThrew : public InvalidVariantError {
+    VariantMoveThrew() : InvalidVariantError() {}
+
+    InvalidReason reason() const noexcept {
+        return InvalidReason::MoveThrew;
+    }
+
+    const char* what() const noexcept {
+        return "Variant invalidated after move constructor throw";
+    }
+};
+
+struct VariantMovedFrom : public InvalidVariantError {
+    VariantMovedFrom() : InvalidVariantError() {}
+
+    InvalidReason reason() const noexcept {
+        return InvalidReason::MovedFrom;
+    }
+
+    const char* what() const noexcept {
+        return "Variant invalidated after being moved from";
+    }
 };
 
 // Enum implementation
@@ -215,7 +258,19 @@ private:
 
             template<typename F>
             static auto invalid(const std::size_t& tag, Self* e, F f) -> decltype(f(*(T*)nullptr)) {
-                throw InvalidVariant(tag - e->variants);
+                switch(tag - e->variants) {
+                    case InvalidReason::CopyThrew:
+                        throw VariantCopyThrew();
+
+                    case InvalidReason::MoveThrew:
+                        throw VariantMoveThrew();
+
+                    case InvalidReason::MovedFrom:
+                        throw VariantMovedFrom();
+
+                    default:
+                        throw InvalidVariantError();
+                }
             }
         };
 
@@ -241,7 +296,19 @@ private:
             }
 
             static auto invalid(const std::size_t& tag, F f, Fs... fs) {
-                return f(InvalidVariant(tag - Self::variants));
+                switch(tag - variants) {
+                    case InvalidReason::CopyThrew:
+                        return f(VariantCopyThrew());
+
+                    case InvalidReason::MoveThrew:
+                        return f(VariantMoveThrew());
+
+                    case InvalidReason::MovedFrom:
+                        return f(VariantMovedFrom());
+
+                    default:
+                        return f(InvalidVariantError());
+                }
             }
         };
 
@@ -257,7 +324,19 @@ private:
             static auto invalid(const std::size_t& tag, Self* e, Fs... fs) 
                 -> decltype(CallNth<T, n, Fs...>::call(*(T*)nullptr, fs...)) {
 
-                throw InvalidVariant(tag - e->variants);
+                switch(tag - e->variants) {
+                    case InvalidReason::CopyThrew:
+                        throw VariantCopyThrew();
+
+                    case InvalidReason::MoveThrew:
+                        throw VariantMoveThrew();
+
+                    case InvalidReason::MovedFrom:
+                        throw VariantMovedFrom();
+
+                    default:
+                        throw InvalidVariantError();
+                }
             }
         };
 
@@ -392,6 +471,16 @@ public:
     template<typename T>
     T& get_unchecked() {
         return *reinterpret_cast<T*>(&storage);
+    }
+
+    // Returns true if the variant is valid
+    bool valid() {
+        return tag < variants;
+    }
+
+    // Returns true if the variant is valid
+    explicit operator bool() {
+        return valid();
     }
 
     ~EnumT() {
