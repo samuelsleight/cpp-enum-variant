@@ -374,7 +374,7 @@ public:
         Constructor<Args...>::construct(this, std::forward<Args>(args)...);
     }
 
-    EnumT(const Self& other) {
+    EnumT(const Self& other) noexcept {
         CopyConstructor::call(other.tag, std::forward<Self>(other), this);
     }
 
@@ -382,7 +382,7 @@ public:
         MoveConstructor::call(other.tag, std::forward<Self>(other), this);
     }
 
-    EnumT& operator=(const Self& other) {
+    EnumT& operator=(const Self& other) noexcept {
         if(this->tag != other.tag) {
             Destructor::call(this->tag, this);
         }
@@ -413,13 +413,13 @@ public:
     }
 
     // Returns the identifying tag
-    std::size_t which() {
+    std::size_t which() const noexcept {
         return tag;
     }
 
     // Returns true if the contained value is of type T
     template<typename T>
-    bool contains() {
+    bool contains() const noexcept {
         return tag == IndexOf<T, VariantT, Variants...>::value;
     }
 
@@ -440,12 +440,12 @@ public:
     }
 
     // Returns true if the variant is valid
-    bool valid() {
+    bool valid() const noexcept {
         return tag < variants;
     }
 
     // Returns true if the variant is valid
-    explicit operator bool() {
+    explicit operator bool() const noexcept {
         return valid();
     }
 
