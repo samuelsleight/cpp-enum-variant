@@ -246,6 +246,9 @@ private:
                 
                 switch(tag - e->variants) {
                     VARIANT_ERROR_EXPAND
+
+                    default:
+                        throw UnknownVariantError();
                 }
 
                 #undef VARIANT_ERROR_X
@@ -278,6 +281,9 @@ private:
 
                 switch(tag - variants) {
                     VARIANT_ERROR_EXPAND
+
+                    default:
+                        return f(UnknownVariantError());
                 }
 
                 #undef VARIANT_ERROR_X
@@ -300,6 +306,9 @@ private:
                 
                 switch(tag - e->variants) {
                     VARIANT_ERROR_EXPAND
+
+                    default:
+                        throw UnknownVariantError();
                 }
 
                 #undef VARIANT_ERROR_X
