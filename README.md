@@ -59,4 +59,39 @@ You can also use ```apply```, which takes a single polymorphic function:
 test.apply([](auto& value) { std::cout << value << std::endl; });
 ```
 
-And that's it!
+## Error Handling
+The above is fine if you are using simple types that can never throw, 
+however a throwing copy/move introduces some extra complexity that needs to be handled.
+
+If a copy (or move) assignment throws, the variant gets set to an invalid state.
+The variant itself is still usable, or assignable to, however the object inside is inaccessible.
+Any attempt to use the object inside an invalid variant will throw an exception stating what caused the invalid state:
+
+```c++
+nasty_variant = NastyType(7); // This copy throws, invalidating the variant.
+try {
+  nasty_variant.apply([](auto& a) { std::cout << a << std::endl; }); // This call will throw.
+} catch(venum::InvalidVariantError& e) {
+  std::cout << e.what(); // This will explain what invalidated the variant.
+}
+```
+
+In addition, ```match``` can take an optional final callback for when the variant is invalid,
+which takes an object of this exception type:
+
+```c++
+nasty_variant.match(
+  // other cases
+  [](const venum::InvalidVariantError& e) { /* handle error case */ }
+);
+```
+
+Finally, there is a ```valid``` function and boolean conversion for convenience:
+
+```c++
+if(nasty_variant) {
+  // it's valid
+} else {
+  // it's not valid
+}
+```
